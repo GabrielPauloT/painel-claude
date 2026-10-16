@@ -1,0 +1,6 @@
+{
+  "name": "painel-claude",
+  "description": "Mod local do Claude Code: o painel lateral no estilo do OpenCode",
+  "owner": { "name": "Gabriel" },
+  "plugins": [{ "name": "painel", "source": "./" }]
+}
