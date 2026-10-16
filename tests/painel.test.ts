@@ -266,3 +266,71 @@ test('a chamada da ferramenta de passos vira uma linha curta no histórico', asy
   expect(text).toContain('Passos 2/5')
   expect(text).toContain('Escrever o register.tsx')
 })
+
+/** Roda um Bash qualquer e devolve o que o modelo leria depois do resultado (o `context`). */
+async function contextoDoBash($: Engine, agentId?: string): Promise<readonly string[]> {
+  const args = { tool: 'Bash', command: 'true', description: 'Rodar algo', ...(agentId === undefined ? {} : { agentId }) }
+  const ran = await $.tool.call(args as unknown as ToolCallArgs)
+
+  return ran.deny === undefined ? (ran.context ?? []) : []
+}
+
+test('seis ferramentas sem mexer nos passos trazem um lembrete na sexta, e só nela', async ($, on) => {
+  mock.clock(on)
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false } }))
+  await $.tool.call(passosCom(PLANO))
+
+  const contextos: Array<readonly string[]> = []
+  for (let i = 0; i < 7; i++) {
+    contextos.push(await contextoDoBash($))
+  }
+
+  expect(contextos.slice(0, 5).flat()).toEqual([])
+  expect(contextos[5]?.join(' ')).toContain(PASSOS)
+  expect(contextos[6]).toEqual([])
+})
+
+test('atualizar os passos zera a contagem do lembrete', async ($, on) => {
+  mock.clock(on)
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false } }))
+  await $.tool.call(passosCom(PLANO))
+
+  const contextos: Array<readonly string[]> = []
+  for (let i = 0; i < 5; i++) {
+    contextos.push(await contextoDoBash($))
+  }
+  await $.tool.call(passosCom(PLANO))
+  for (let i = 0; i < 5; i++) {
+    contextos.push(await contextoDoBash($))
+  }
+
+  expect(contextos.flat()).toEqual([])
+})
+
+test('ferramentas de subagente não contam para o lembrete', async ($, on) => {
+  mock.clock(on)
+  on('agent.list', () => ({ value: [] }))
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false } }))
+  await $.tool.call(passosCom(PLANO))
+
+  const contextos: Array<readonly string[]> = []
+  for (let i = 0; i < 6; i++) {
+    contextos.push(await contextoDoBash($, 'a1'))
+  }
+
+  expect(contextos.flat()).toEqual([])
+})
+
+test('fora de sessão interativa não há lembrete, porque lá a ferramenta de passos não existe', async ($, on) => {
+  mock.clock(on)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout: '', stderr: '', interrupted: false } }))
+  await $.session.start({ cwd: '/srv/app', surface: null, isInteractive: false })
+
+  const contextos: Array<readonly string[]> = []
+  for (let i = 0; i < 6; i++) {
+    contextos.push(await contextoDoBash($))
+  }
+
+  expect(contextos.flat()).toEqual([])
+})

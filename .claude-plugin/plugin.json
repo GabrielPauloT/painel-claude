@@ -1,6 +1,6 @@
 {
   "name": "painel",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Painel lateral no estilo do OpenCode: o que o Claude está fazendo, o pensamento ao vivo, os próximos passos, os arquivos editados (+/−) e o contexto.",
   "author": { "name": "Gabriel" },
   "types": "./types/index.d.ts"

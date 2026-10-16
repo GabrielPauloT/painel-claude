@@ -38,6 +38,8 @@ Para desinstalar: `claude plugin uninstall painel@painel-claude`.
   `~/.claude/settings.json`; fora disso vira uma linha acima do prompt.
 - `/painel` abre e fecha. Fechado, ele fica fechado nas próximas sessões até você abrir de novo.
 - `/painel limpar` zera passos e arquivos.
+- Se o Claude passar 6 ferramentas sem atualizar os passos, o painel deixa um lembrete para ele depois do resultado
+  da sexta. O lembrete vai só para o modelo; você não vê.
 - Linhas mudadas por `sed`/heredoc no Bash não entram na conta (só Edit, Write e NotebookEdit).
 - Em sessão sem tela (`claude -p`, SDK) não registra a ferramenta nem abre o painel.
 

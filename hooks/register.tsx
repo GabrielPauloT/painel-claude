@@ -31,13 +31,17 @@ const MAX_PENSAMENTO = 4000
 const LINHAS_PENSAMENTO = 6
 const MAX_ARQUIVOS = 10
 const MAX_SUBAGENTES = 5
+/** De quantas em quantas ferramentas sem mexer nos passos o painel lembra o modelo. */
+const LEMBRAR_A_CADA = 6
 
 // As regras de uso moram na descrição da ferramenta, não só no prompt de sistema:
 // onde uma organização gerencia o Claude Code, o prompt.compose de um plugin instalado não roda.
 const DESCRICAO = [
   'Publica o plano no painel lateral que o usuário acompanha enquanto você trabalha.',
   'Em toda tarefa que use ferramentas, mesmo pequena, chame antes de começar com o plano inteiro: passos curtos (até uns 50 caracteres), em pt-BR, no infinitivo ("Ler a API de mods").',
-  'A cada passo concluído, chame de novo: marque-o "feito" e o próximo "fazendo" na mesma chamada. Antes da resposta final, deixe como "feito" o que você concluiu.',
+  'Assim que um passo terminar, chame de novo antes da próxima ferramenta: marque-o "feito" e o próximo "fazendo" na mesma chamada.',
+  'Um passo por vez: o usuário acompanha o contador, e dois passos marcados juntos aparecem como um salto (0/6 → 2/6) que esconde o andamento.',
+  'Antes da resposta final, deixe como "feito" o que você concluiu.',
   'Mande sempre a lista inteira, na ordem, com o status de cada passo: "pendente", "fazendo" (no máximo um) ou "feito". Cada chamada substitui a lista anterior.',
 ].join(' ')
 
@@ -68,6 +72,7 @@ const SECAO = {
   text: [
     '# Painel lateral',
     `O usuário acompanha seu trabalho num painel lateral do Claude Code: a ferramenta em uso, o seu pensamento, os arquivos editados e o plano que você publica com ${PASSOS}, do jeito que a descrição dela pede (em toda tarefa que use ferramentas).`,
+    '- Atualize os passos um por vez, assim que cada um terminar e antes da próxima ferramenta. Se você passar várias ferramentas sem atualizar, o painel deixa um lembrete depois do resultado.',
     '- Para mudar o conteúdo de arquivos, prefira Edit/Write a sed ou heredoc no Bash: o painel conta as linhas +/− pelas ferramentas Edit e Write.',
     `- Subagentes não precisam chamar ${PASSOS}.`,
   ].join('\n'),
@@ -110,6 +115,9 @@ let pensando = ''
 let isPensamentoSujo = false
 let tokensAoVivo: number | undefined
 let segundoPublicado = -1
+let ferramentasSemPassos = 0
+// Fora de sessão interativa a ferramenta de passos não é registrada: lá não há o que lembrar.
+let isInterativa = true
 const atividadeDoAgente = new Map<string, string>()
 
 function caminho(path: string): string {
@@ -279,12 +287,18 @@ async function responderPassos($: Motor, value: unknown, agentId: string | undef
     return { result: 'Não precisa: o painel mostra só o plano da conversa principal. Não chame de novo.' }
   }
   await update($, passos, () => lista)
+  ferramentasSemPassos = 0
   const feitos = lista.filter(p => p.status === 'feito').length
   const atual = lista.find(p => p.status === 'fazendo')
 
   return {
     result: `Painel atualizado: ${feitos}/${lista.length} feitos${atual === undefined ? '' : `; agora: ${atual.texto}`}.`,
   }
+}
+
+/** O que o modelo lê depois de uma ferramenta quando os passos ficaram parados (o usuário não vê). */
+function lembrete(n: number): string {
+  return `Painel: os passos não mudam há ${n} ferramentas. Se um passo terminou, atualize agora com ${PASSOS} (marque-o "feito" e o próximo "fazendo"); se ainda não há plano ou a tarefa mudou, publique o plano.`
 }
 
 function somar(lista: readonly PainelArquivo[]): { added: number; removed: number } {
@@ -298,6 +312,7 @@ function textoDoContador(a: { added: number; removed: number }): string {
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
     cwd = e.cwd
+    isInterativa = e.isInteractive
     try {
       home = (await $.env.get('HOME')) ?? ''
     } catch {
@@ -461,6 +476,12 @@ export const register: Register = on => {
       const ran = await next(e)
       if (ran.deny === undefined && ran.isError !== true) {
         await registrarEdicao($, nome, ran.result).catch(() => {})
+      }
+      if (e.agentId === undefined && isInterativa) {
+        ferramentasSemPassos += 1
+        if (ran.deny === undefined && ferramentasSemPassos % LEMBRAR_A_CADA === 0) {
+          return { ...ran, context: [...(ran.context ?? []), lembrete(ferramentasSemPassos)] }
+        }
       }
 
       return ran
