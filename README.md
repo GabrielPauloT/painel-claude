@@ -8,6 +8,10 @@ Mod do Claude Code (feito na 2.1.301) que abre um painel à direita da conversa,
 - **Arquivos:** cada arquivo editado com +/− linhas e o total
 - **Subagentes** rodando e **contexto** (barra, tokens e custo estimado)
 
+![O painel à direita da conversa durante um turno: o que está rodando, o pensamento ao vivo, os passos, os arquivos editados, o subagente e o contexto](docs/painel.webp)
+
+<sub>Um turno de exemplo, acelerado. O painel foi desenhado pelo próprio código do mod, no kit de testes do Claude Code; o projeto, a conversa e os números são inventados.</sub>
+
 ## Instalar
 
 No prompt de uma sessão do Claude Code no terminal:
